@@ -1,0 +1,6 @@
+# Projects created by deploy_agent.sh
+attendance_tracker_*/
+attendance_tracker_*_archive.zip
+
+# Windows download metadata
+*:Zone.Identifier

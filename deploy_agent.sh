@@ -103,7 +103,10 @@ preflight() {
 	info "Found $(python3 --version 2>&1)"
 	for file in "$APP" config.json assets.csv; do
 		[ -f "$TEMPLATES_DIR/$file" ] || fail "Missing template: templates/$file"
+		[ -r "$TEMPLATES_DIR/$file" ] || fail "Permission denied: cannot read templates/$file"
 	done
+	[ -w "$SCRIPT_DIR" ] && [ -x "$SCRIPT_DIR" ] ||
+		fail "Permission denied: cannot create projects in $SCRIPT_DIR. Check its permissions (ls -ld \"$SCRIPT_DIR\")."
 }
 
 ask_project_name() {

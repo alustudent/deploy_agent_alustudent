@@ -2,7 +2,7 @@
 
 `deploy_agent.sh` bootstraps, runs and archives the **Student Attendance Tracker** (`attendance_checker.py`). It deploys the project structure from `templates/`, starts the interactive marking session, and archives the session logs with timestamped filenames. If deployment is interrupted with Ctrl+C or Ctrl+Z, it zips the partial project and removes the incomplete directory.
 
-Video walkthrough: TODO add link
+Video walkthrough: https://youtu.be/eHpP7wEtcv4
 
 ## Requirements
 

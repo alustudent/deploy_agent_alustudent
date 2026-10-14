@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 # Deploys, runs and archives the Student Attendance Tracker.
-# Usage: ./deploy_agent.sh [deploy | run <name> | archive <name>]   (no argument shows a menu)
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 TEMPLATES_DIR="$SCRIPT_DIR/templates"
@@ -8,19 +7,21 @@ APP=attendance_checker.py
 MAX_ATTEMPTS=3
 OPTION_B_MAX=100
 
-# Option B roster names. Emails get a numeric suffix once the list wraps, so they stay unique.
 SAMPLE_STUDENTS=(
 	"Amara Okafor" "Kwame Asante" "Lina Haddad" "Mateo Silva" "Nia Mwangi"
 	"Omar Farouk" "Priya Nair" "Ravi Patel" "Sofia Rossi" "Tariq Bello"
 )
 
 PROJECT_DIR=""
-# Set only once this run creates PROJECT_DIR, so cleanup never touches a directory it didn't make
+# Set only once this run creates PROJECT_DIR, so cleanup never deletes a directory it didn't make
 CREATED_DIR=""
 ANSWER=""
 
 info() { printf '[deploy_agent] %s\n' "$*"; }
 warn() { printf '[deploy_agent] %s\n' "$*" >&2; }
+
+lower() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]'; }
+upper() { printf '%s' "$1" | tr '[:lower:]' '[:upper:]'; }
 
 remove_partial_project() {
 	[ -n "$CREATED_DIR" ] && [ -d "$CREATED_DIR" ] || return 0
@@ -36,8 +37,7 @@ fail() {
 	exit 1
 }
 
-# ask PROMPT VALIDATOR [ARGS...]: stores the answer in ANSWER, giving up after MAX_ATTEMPTS invalid ones.
-# VALIDATOR is called as VALIDATOR ANSWER ARGS... and prints why it rejected an answer.
+# ask PROMPT VALIDATOR [ARGS...]: sets ANSWER, giving up after MAX_ATTEMPTS invalid answers
 ask() {
 	local prompt=$1 validator=$2 answer attempt left
 	shift 2
@@ -54,7 +54,6 @@ ask() {
 	fail "Too many invalid answers ($MAX_ATTEMPTS)."
 }
 
-# valid_int VALUE MIN MAX
 valid_int() {
 	if [[ $1 =~ ^[0-9]{1,6}$ ]] && ((10#$1 >= $2 && 10#$1 <= $3)); then return 0; fi
 	warn "Enter a whole number from $2 to $3."
@@ -67,28 +66,26 @@ valid_name() {
 	return 1
 }
 
-# Empty means no
 valid_yes_no() {
-	[[ ${1,,} =~ ^(y|yes|n|no)?$ ]] && return 0
+	[[ $(lower "$1") =~ ^(y|yes|n|no)?$ ]] && return 0
 	warn "Answer y or n."
 	return 1
 }
 
-is_yes() { [[ ${1,,} =~ ^y(es)?$ ]]; }
+is_yes() { [[ $(lower "$1") =~ ^y(es)?$ ]]; }
 
 valid_roster_option() {
-	[[ ${1^^} =~ ^[AB]$ ]] && return 0
+	[[ $(upper "$1") =~ ^[AB]$ ]] && return 0
 	warn "Choose A or B."
 	return 1
 }
 
-# valid_threshold VALUE CURRENT MIN MAX: empty keeps CURRENT
 valid_threshold() { valid_int "${1:-$2}" "$3" "$4"; }
 
 config_number() { grep -oE "\"$2\": *[0-9]+" "$1" | grep -oE '[0-9]+$'; }
 
-# Replaces only the number after "KEY":, keeping the key, spacing and key order
-set_config_number() { sed -i -E "s/(\"$2\": *)[0-9]+/\\1$3/" "$1"; }
+# -i.bak because BSD (macOS) sed takes -E as the backup suffix in -i -E
+set_config_number() { sed -i.bak -E "s/(\"$2\": *)[0-9]+/\\1$3/" "$1" && rm -f -- "$1.bak"; }
 
 preflight() {
 	info "Running pre-flight checks..."
@@ -134,7 +131,7 @@ build_structure() {
 
 roster_from_template() {
 	local available
-	available=$(awk 'NR > 1 && NF' "$TEMPLATES_DIR/assets.csv" | wc -l)
+	available=$(awk 'NR > 1 && NF { n++ } END { print n + 0 }' "$TEMPLATES_DIR/assets.csv")
 	ask "How many students to copy (1-$available)? " valid_int 1 "$available"
 	# awk 1 adds the newline the template's last line lacks
 	head -n $((10#$ANSWER + 1)) "$TEMPLATES_DIR/assets.csv" | awk 1 > "$PROJECT_DIR/Helpers/assets.csv" ||
@@ -155,17 +152,16 @@ roster_generated() {
 			last=${name##* }
 			suffix=""
 			((i >= samples)) && suffix=$((i / samples + 1))
-			echo "${first,,}.${last,,}$suffix@example.com,$name,0,0"
+			echo "$(lower "$first.$last")$suffix@example.com,$name,0,0"
 		done
 	} > "$PROJECT_DIR/Helpers/assets.csv" || fail "Could not write Helpers/assets.csv"
-	# A fresh roster has no prior sessions, so today is session 1
 	set_config_number "$PROJECT_DIR/Helpers/config.json" total_sessions 1 || fail "Could not update total_sessions."
 	info "Generated $count students in Helpers/assets.csv and set total_sessions to 1"
 }
 
 build_roster() {
 	ask "Roster: [A] copy students from the template, [B] generate a fresh roster: " valid_roster_option
-	if [ "${ANSWER^^}" = A ]; then roster_from_template; else roster_generated; fi
+	if [ "$(upper "$ANSWER")" = A ]; then roster_from_template; else roster_generated; fi
 }
 
 set_permissions() {
@@ -195,7 +191,6 @@ update_thresholds() {
 	info "Thresholds set: warning=$warning, failure=$failure"
 }
 
-# Zips whatever exists of the project, removes the incomplete directory and exits non-zero
 on_interrupt() {
 	local signal=$1 code=$2 parent base
 	trap - INT TSTP
@@ -234,7 +229,6 @@ valid_existing_project() {
 	return 1
 }
 
-# resolve_project [NAME]: sets PROJECT_DIR from NAME, or asks for it when NAME is empty
 resolve_project() {
 	if [ -z "$1" ]; then
 		ask "Project name (attendance_tracker_<name>): " valid_existing_project
@@ -250,7 +244,6 @@ run_project() {
 	run_app "$PROJECT_DIR"
 }
 
-# Moves each existing log to archives/<log>/<log>_<timestamp>.log; a missing log is skipped
 archive_logs() {
 	resolve_project "$1"
 	local timestamp log source target archived=0
@@ -273,7 +266,6 @@ archive_logs() {
 
 deploy() {
 	preflight
-	# The trap covers deployment only, never the marking session
 	trap 'on_interrupt INT 130' INT
 	trap 'on_interrupt TSTP 148' TSTP
 	ask_project_name
@@ -281,7 +273,7 @@ deploy() {
 	build_roster
 	set_permissions
 	update_thresholds
-	# From here the project is complete, so neither the trap nor a failure may delete it
+	# Deployment is complete: the trap must not cover the marking session or delete the project
 	trap - INT TSTP
 	CREATED_DIR=""
 	info "Deployed $(basename "$PROJECT_DIR")/. Verifying by running the app."

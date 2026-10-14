@@ -6,7 +6,7 @@ Video walkthrough: TODO add link
 
 ## Requirements
 
-- Bash
+- Bash 3.2 or newer (works with the bash that ships with macOS)
 - `python3` (the script checks `python3 --version` before deploying)
 - `zip` (Ubuntu: `sudo apt install zip`)
 

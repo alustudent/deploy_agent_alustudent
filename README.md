@@ -49,7 +49,7 @@ Every prompt validates its answer and allows **3 attempts**, showing how many ar
 
 ## Feature 1: Deploy
 
-1. **Pre-flight checks:** verifies `python3` (prints `python3 --version`) and `zip` are installed, and exits with a clear message if either is missing.
+1. **Pre-flight checks:** verifies `python3` (prints `python3 --version`) and `zip` are installed, that the three templates exist and are readable, and that the script's folder is writable. It exits with a clear message before any prompt if a check fails.
 2. **Project name:** asks for a name and creates `attendance_tracker_<name>/`. Names may contain letters, digits, `-` and `_`. If the directory already exists, the script asks `Overwrite it? [y/N]`. Answering `y` replaces it. Answering `n` or pressing Enter aborts without touching it.
 3. **Files:** copies `attendance_checker.py` and `config.json` from `templates/` and builds `Helpers/assets.csv` from one of two options:
    - **Option A, copy:** the header plus the first N students from `templates/assets.csv` (N from 1 to the number of students in the template, 10).
@@ -138,6 +138,7 @@ attendance_tracker_<name>/reports/
 
 - Option A with 3 and with all 10 students, and Option B with 4 students: checked the structure, roster rows and `total_sessions`.
 - Permissions checked with `ls -l` (`-rwx` on the app, `-rw-------` on `config.json`).
+- Permission denied: a read-only project folder and an unreadable template (`chmod 555` / `chmod 000`) stop the deploy at pre-flight. A project that can't be fully removed on overwrite, and logs that can't be moved, stop with an error instead of continuing.
 - Threshold update with valid, empty and non-numeric input, then checked `config.json` with `cat` and `python3 -m json.tool`.
 - Deploying over an existing directory, answering both overwrite and abort.
 - A run with nobody absent, followed by archiving, to check the missing `absent.log` case.
